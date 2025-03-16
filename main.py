@@ -8,6 +8,33 @@ import random
 
 
 
+# search password manager
+
+def search():
+    website = website_entry.get().strip() # → Mengambil inputan di website_entry.
+
+    if not website:
+        messagebox.showwarning(title="Oops", message="Please enter a website name.")
+        return
+
+    try:
+        with open("data.txt", "r") as data_file:
+            for line in data_file:
+                parts = line.strip().split(" | ") # → Membagi data berdasarkan " | ".
+                if len(parts) == 3 and parts[0].lower() == website.lower(): # → Cek apakah website yang dicari ada di file.
+                    email, password = parts[1], parts[2]
+                    messagebox.showinfo(title=website, message=f"Email: {email}\nPassword: {password}")
+                    pyperclip.copy(password)  # Salin password ke clipboard
+                    return
+
+        messagebox.showwarning(title="Not Found", message=f"No details for {website} found.")
+
+    except FileNotFoundError:
+        messagebox.showerror(title="Error", message="No Data File Found")
+    except Exception as e:
+        messagebox.showerror(title="Error", message=f"An unexpected error occurred.\nError: {e}")
+    
+
 
 
 
@@ -78,7 +105,6 @@ def save():
         try:
             with open("data.txt", "a") as data_file:
                 data_file.write(f"{website} | {email} | {password}\n") # → Menulis data ke file.
-            # messagebox.showinfo(title="Success", message="Data saved successfully.")
             show_success_message()
             website_entry.delete(0, END) # → Menghapus inputan di website_entry.
             email_entry.delete(0, END) # → Menghapus inputan di email_entry.
@@ -124,6 +150,9 @@ add_button.grid(row=4, column=1, columnspan=2, pady=10)
 
 open_file_button = Button(text="Open File", width=36, command=open_file)
 open_file_button.grid(row=5, column=1, columnspan=2, pady=10)
+
+search_password_button = Button(text="Search", width=10, command=search)
+search_password_button.grid(row=1, column=2, padx=5, pady=5)
 
 window.mainloop() # → Membuat window menjadi aktif.
 
