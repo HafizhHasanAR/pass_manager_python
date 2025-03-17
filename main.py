@@ -1,53 +1,92 @@
 from tkinter import * # → Untuk membuat GUI.
+import string
 from tkinter import messagebox
 from random import shuffle, choice, randint
 import pyperclip # → Untuk menyalin password ke clipboard secara otomatis.
 import os
 import random
+import json
 
 
 
 
-# search password manager
-
-def search():
-    website = website_entry.get().strip() # → Mengambil inputan di website_entry.
+def search_password():
+    """Mencari dan menampilkan password berdasarkan input website"""
+    website = website_entry.get().strip().lower()  # Ambil input & ubah ke huruf kecil
 
     if not website:
-        messagebox.showwarning(title="Oops", message="Please enter a website name.")
+        messagebox.showwarning("Warning", "Please enter a website name!")
+        return
+
+    # Cari lokasi file password_manager_master.json
+    data_file_path = find_data_json("password_manager_master.json")
+
+    if not data_file_path:
+        messagebox.showwarning("Warning", "File 'password_manager_master.json' not found!")
         return
 
     try:
-        with open("data.txt", "r") as data_file:
-            for line in data_file:
-                parts = line.strip().split(" | ") # → Membagi data berdasarkan " | ".
-                if len(parts) == 3 and parts[0].lower() == website.lower(): # → Cek apakah website yang dicari ada di file.
-                    email, password = parts[1], parts[2]
-                    messagebox.showinfo(title=website, message=f"Email: {email}\nPassword: {password}")
-                    pyperclip.copy(password)  # Salin password ke clipboard
-                    return
+        with open(data_file_path, "r") as data_file: # Buka file JSON
+            data = json.load(data_file)
+    except json.JSONDecodeError:
+        messagebox.showerror("Error", "Error reading JSON file. The file may be corrupted.")
+        return
 
-        messagebox.showwarning(title="Not Found", message=f"No details for {website} found.")
+    # Konversi semua kunci (nama website) ke lowercase untuk pencarian
+    matched_key = next((key for key in data if key.lower() == website), None)
 
-    except FileNotFoundError:
-        messagebox.showerror(title="Error", message="No Data File Found")
-    except Exception as e:
-        messagebox.showerror(title="Error", message=f"An unexpected error occurred.\nError: {e}")
+    if matched_key:
+        email = data[matched_key]["email"]
+        password = data[matched_key]["password"]
+        messagebox.showinfo("Password", f"Email: {email}\nPassword: {password}")
+        pyperclip.copy(password)  # Salin password ke clipboard
+    else:
+        messagebox.showwarning("Warning", f"Data for '{website}' not found!")
+
+    website_entry.delete(0, END)
+
+# ---------------------------- FIND password_manager_master.json FILE ------------------------------- #
+
+def find_data_json(filename="password_manager_master.json"):
+    """Mencari file JSON di semua drive Windows jika tidak ditemukan di direktori saat ini"""
+
+    # Cek apakah file sudah ada di direktori saat ini
+    if os.path.exists(filename):
+        return filename
+
+    # Deteksi semua drive yang tersedia
+    drives = [f"{d}:/" for d in string.ascii_uppercase if os.path.exists(f"{d}:/")]
+
+    print(f"🔍 Searching for '{filename}' in all drives... (this may take time)")
+
+    for drive in drives:
+        print(f"📂 Scanning drive: {drive}")
+
+        try:
+            for root, dirs, files in os.walk(drive): # Iterasi semua file di drive
+                if filename in files:
+                    full_path = os.path.join(root, filename) # Path lengkap file
+                    print(f"✅ File found: {full_path}")
+                    return full_path  # Kembalikan path file
+        except PermissionError:
+            print(f"⚠️ Access Denied: {drive} (Skipping)")
+
+    print(f"❌ '{filename}' not found in any drive!")
+    return None
+
+
+# ---------------------------- OPEN password_manager_master.json FILE ------------------------------- #
+
+def open_data_file():
+    """Membuka file password_manager_master.json jika ditemukan"""
+    data_file_path = find_data_json()
     
+    if data_file_path:
+        os.startfile(data_file_path)  # Membuka file dengan aplikasi default
+    else:
+        messagebox.showwarning("File Not Found", "File 'password_manager_master.json' not found in any drive!")
 
-
-
-
-# ---------------------------- OPEN FILE ------------------------------- #
-
-def open_file():
-    try:
-        if os.path.exists("data.txt"):  # Cek apakah file ada
-            os.system("notepad.exe data.txt")  # Buka dengan Notepad di Windows
-        else:
-            messagebox.showwarning("Warning", "File 'data.txt' not found!")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to open file.\nError: {e}")
+        
 
 # ---------------------------- SHOW SUCCESS MESSAGE ------------------------------- #
 
@@ -88,29 +127,34 @@ def generate_password():
 # ---------------------------- SAVE PASSWORD ------------------------------- #
 
 def save():
-    website = website_entry.get().strip()
-    email = email_entry.get().strip()
-    password = password_entry.get().strip()
+    
+    website = website_entry.get()
+    email = email_entry.get()
+    password = password_entry.get()
+    new_data = {
+        website: {
+            "email": email,
+            "password": password
+        }
+    }
 
-    if not website or not password:
-        messagebox.showwarning(title="Oops", message="Please fill in all fields.")
-        return
-
-    is_ok = messagebox.askokcancel(
-        title=website, 
-        message=f"These are the details entered:\nEmail: {email}\nPassword: {password}\nSave?"
-    )
-
-    if is_ok:
+    if len(website) == 0 or len(password) == 0:
+        messagebox.showwarning(title="Oops", message="Please don't leave any fields empty!")
+    else:
         try:
-            with open("data.txt", "a") as data_file:
-                data_file.write(f"{website} | {email} | {password}\n") # → Menulis data ke file.
+            with open("password_manager_master.json", "r") as data_file:
+                data = json.load(data_file)
+        except FileNotFoundError:
+            with open("password_manager_master.json", "w") as data_file:
+                json.dump(new_data, data_file, indent=4)
+        else:
+            data.update(new_data)
+            with open("password_manager_master.json", "w") as data_file:
+                json.dump(data, data_file, indent=4)
+        finally:
+            website_entry.delete(0, END)
+            password_entry.delete(0, END)
             show_success_message()
-            website_entry.delete(0, END) # → Menghapus inputan di website_entry.
-            email_entry.delete(0, END) # → Menghapus inputan di email_entry.
-            password_entry.delete(0, END) # → Menghapus inputan di password_entry.
-        except Exception as e:
-            messagebox.showerror(title="Error", message=f"Failed to save data.\nError: {e}")
 
 # ---------------------------- UI SETUP ------------------------------- #
 
@@ -128,6 +172,7 @@ canvas.grid(row=0, column=1, pady=10)
 Label(text="Website:").grid(row=1, column=0, sticky="e", padx=5, pady=5) # → Sticky="e" → Membuat label ke kanan.
 Label(text="Email/Username:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
 Label(text="Password:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
+Label(text="Powered by Hafizh Hasan", font=("Arial", 10, "italic")).grid(row=6, column=1, columnspan=2, sticky="se", padx=5, pady=5)
 
 # Entries
 website_entry = Entry(width=33)
@@ -148,10 +193,11 @@ generate_password_button.grid(row=3, column=2, padx=5, pady=5)
 add_button = Button(text="Add", width=36, command=save)
 add_button.grid(row=4, column=1, columnspan=2, pady=10)
 
-open_file_button = Button(text="Open File", width=36, command=open_file)
-open_file_button.grid(row=5, column=1, columnspan=2, pady=10)
 
-search_password_button = Button(text="Search", width=10, command=search)
+find_file_button = Button(text="Find Data File", width=36, command=open_data_file)
+find_file_button.grid(row=5, column=1, columnspan=2, pady=10)
+
+search_password_button = Button(text="Search", width=10, command=search_password)
 search_password_button.grid(row=1, column=2, padx=5, pady=5)
 
 window.mainloop() # → Membuat window menjadi aktif.
